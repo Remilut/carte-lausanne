@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fortunes lausannoises 1867–1955 – carte interactive</title>
+<link rel="stylesheet" href="css/style.css">
+
+</head>
+<body>
+
+<div class="main">
+
+<!-- CARTE -->
+<section id="carte" style="padding:0;" class="map-section">
+  <div class="map-header">
+    <div class="mh-l">
+      <h2>Carte interactive — où vivent les contribuables aisés ?</h2>
+      <p>Chaque cercle = un contribuable · Taille proportionnelle à la fortune (√fortune) · Fond : plans historiques contemporains du registre</p>
+    </div>
+    <div class="mh-stats">
+      <div class="mhstat"><div class="v" id="hCount">—</div><div class="l">Contribuables</div></div>
+      <div class="mhstat"><div class="v" id="hTotal">—</div><div class="l">Fortune totale</div></div>
+      <div class="mhstat"><div class="v" id="hMedian">—</div><div class="l">Médiane</div></div>
+    </div>
+  </div>
+  <div class="timeline">
+    <div class="tl-top">
+      <span class="tl-yr" id="tlYr">1867</span>
+      <span class="tl-plan" id="tlPlan"></span>
+    </div>
+    <div class="tl-marks" id="tlMarks"></div>
+    <input type="range" class="tl" id="tlSlider" min="0" max="7" step="1" value="0" oninput="setYear(this.value)">
+    <div class="tl-stats" id="tlStats"></div>
+  </div>
+  <div class="map-ctrl">
+    <div>
+      <div class="mc-label" style="margin-bottom:4px">Couleur</div>
+      <div class="cbtn-row">
+        <button class="cbtn active" onclick="setColorMode('uniform',this)">Uniforme</button>
+        <button class="cbtn" onclick="setColorMode('prof',this)">Profession</button>
+        <button class="cbtn" onclick="setColorMode('fortune',this)">Fortune</button>
+      </div>
+    </div>
+    <div>
+      <div class="mc-label" style="margin-bottom:4px">Filtre</div>
+      <div class="fb-row" id="fbRow"></div>
+    </div>
+    <div>
+      <div class="mc-label" style="margin-bottom:4px">Fond de carte</div>
+      <select id="fondSelect" onchange="setFondOverride(this.value)" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border);font-family:'Georgia',serif;font-size:0.68rem;padding:4px 6px;border-radius:2px;">
+        <option value="">Auto (plan cadastral/Lebet, selon l'année)</option>
+        <option value="1867">Plan Lebet, 1867</option>
+        <option value="1896">Plan de Lausanne, ~1896</option>
+        <option value="1937">Plan cadastral, ~1937</option>
+        <option value="1959">Plan cadastral, ~1959</option>
+        <optgroup label="Cartes Siegfried (feuilles 438+438bis)">
+          <option value="siegfried-auto">Auto (Siegfried, selon l'année)</option>
+          <option value="1873">Siegfried 1873</option>
+          <option value="1889">Siegfried 1889</option>
+          <option value="1894">Siegfried 1894</option>
+          <option value="1926">Siegfried 1926</option>
+          <option value="1934">Siegfried 1934</option>
+          <option value="1945">Siegfried 1945</option>
+        </optgroup>
+      </select>
+    </div>
+    <div>
+      <div class="mc-label" style="margin-bottom:4px">Correction manuelle</div>
+      <div class="cbtn-row">
+        <button class="cbtn" id="editModeBtn" onclick="toggleEditMode(this)">Mode correction</button>
+      </div>
+    </div>
+    <div>
+      <div class="mc-label" style="margin-bottom:4px">Données (MN95)</div>
+      <div class="cbtn-row">
+        <button class="cbtn" id="exportAllBtn" onclick="exportAllPoints()" title="Tous les points de toutes les années, avec coordonnées MN95 (E, N)">Exporter tous les points (CSV)</button>
+        <button class="cbtn" id="importBtn" onclick="importPointsCSV()" title="Réimporter un CSV modifié (colonnes id_obs, E_MN95, N_MN95)">Importer un CSV</button>
+      </div>
+    </div>
+    <div>
+      <div class="mc-label" style="margin-bottom:4px">Recalage des fonds</div>
+      <div class="cbtn-row">
+        <button class="cbtn" id="calibModeBtn" onclick="toggleCalibMode(this)">Mode calibration</button>
+      </div>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+      <span class="mc-label">Opacité</span>
+      <input type="range" min="20" max="90" value="72" id="sl_op" oninput="updateOpacity(this.value)" style="width:90px;">
+      <span style="font-size:0.7rem;color:var(--text2);" id="op_val">72%</span>
+    </div>
+  </div>
+  <p class="map-hint" id="mapHint">Molette = zoom · Cliquer-glisser = naviguer · Clic sur un point = fiche détaillée · ▲ = top 10 fortunes de l'année · Fond de carte : un choix manuel recalcule les positions par transformation géographique</p>
+  <div class="map-outer" id="mapOuter">
+    <div class="map-inner" id="mapInner">
+      <img id="mapImg" src="" alt="Plan historique de Lausanne"/>
+      <svg class="ov" id="mapSvg" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div class="edit-panel" id="editPanel">
+      <h4>Corrections en cours (<span id="editCount">0</span>)</h4>
+      <div class="edit-hint">Clique-glisse un point pour le repositionner. Chaque correction est <b>sauvegardée automatiquement dans ce navigateur</b> (elle survit au rechargement). Pour l'inscrire <b>dans le fichier HTML lui-même</b>, utilise « Enregistrer dans le HTML ».</div>
+      <div id="editList"><div class="edit-empty">Aucune correction pour l'instant</div></div>
+      <div class="edit-actions">
+        <button onclick="saveToHtml()" title="Écrit les corrections dans le fichier HTML (Chrome/Edge : écriture directe ; autres navigateurs : téléchargement d'une copie à jour)">Enregistrer dans le HTML</button>
+        <button onclick="exportCorrections()">Exporter CSV</button>
+        <button onclick="clearCorrections()">Tout effacer</button>
+      </div>
+    </div>
+    <div class="edit-panel" id="calibPanel">
+      <h4>Points de calibration (<span id="calibCount">0</span>)</h4>
+      <div class="edit-hint calib-hint">Clique un même repère réel (coin de bâtiment, croisement...) sur ce fond, donne-lui un nom, puis change de fond et reclique <b>exactement le même repère</b> avec <b>le même nom</b>. Répète sur 4-6 repères bien répartis sur la carte, sur les deux fonds à recaler l'un par rapport à l'autre.</div>
+      <div id="calibList"><div class="edit-empty">Aucun point pour l'instant</div></div>
+      <div class="edit-actions">
+        <button onclick="exportCalibPoints()">Exporter CSV</button>
+        <button onclick="clearCalibPoints()">Tout effacer</button>
+      </div>
+    </div>
+    <div class="map-badge" id="mapBadge"></div>
+    <div id="mapCoords" style="position:absolute;left:50%;transform:translateX(-50%);top:10px;z-index:5;font-size:0.65rem;color:var(--text2);background:rgba(0,0,0,0.55);padding:3px 8px;border-radius:4px;pointer-events:none;font-variant-numeric:tabular-nums;">MN95 : survolez la carte</div>
+    <div class="leg-size">
+      <div class="ls-title">Fortune (CHF)</div>
+      <div class="ls-items" id="legSizeItems"></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:0.6rem;color:var(--text3);">
+        <svg width="12" height="11" style="flex-shrink:0;"><polygon points="6,0 11,9.5 1,9.5" fill="rgba(231,76,60,0.55)" stroke="#ffd54a" stroke-width="1.2"/></svg>
+        Top 10 fortunes de l'année
+      </div>
+    </div>
+    <div class="leg-prof" id="legProf">
+      <div class="lp-title">Professions</div>
+      <div id="legProfItems"></div>
+    </div>
+    <div class="leg-grad" id="legGrad">
+      <div class="lp-title">Fortune — dégradé</div>
+      <div class="lg-bar"></div>
+      <div class="lg-labels"><span>Faible</span><span>Élevée</span></div>
+    </div>
+    <div class="scale-bar" id="scaleBar"><div class="sb-line" id="sbLine"></div><div class="sb-label" id="sbLabel">—</div></div>
+    <div class="north-arrow" id="northArrow"><svg width="30" height="30" viewBox="0 0 30 30"><g id="naGroup"><polygon points="15,4 19.5,23 15,18.5 10.5,23" fill="#d4b896" stroke="#0a0a0a" stroke-width="0.6"/><text x="15" y="13" font-size="7" fill="#0a0a0a" text-anchor="middle" font-family="Georgia">N</text></g></svg></div>
+    <div class="zc">
+      <button class="zb" onclick="mapZoom(1.35)">+</button>
+      <button class="zb sm" onclick="mapReset()">↺</button>
+      <button class="zb" onclick="mapZoom(0.74)">−</button>
+    </div>
+  </div>
+</section>
+<div class="mentions"><b>Sources et mentions.</b> Les informations affichées (noms, fortunes, professions, adresses) sont tirées de registres d'impôts historiques conservés aux Archives cantonales vaudoises (ACV, cotes K X a 144 à 146), accessibles à toute personne qui les consulte. Elles sont reproduites telles qu'elles figurent dans ces sources, à des fins exclusivement scientifiques et non commerciales. Les positions sont des reconstitutions cartographiques établies à partir d'adresses historiques : elles sont approximatives, ne désignent pas nécessairement le lieu exact de résidence, et des erreurs de transcription ou de localisation restent possibles. Les montants sont ceux consignés dans ces registres. Projet de recherche de l'Université de Lausanne (« Les beaux quartiers »). Toute demande de correction ou de retrait peut être adressée à l'équipe du projet. <a href="donnees.html">Politique de gestion des données</a></div>
+
+</div><!-- .main -->
+
+<div class="popup" id="popup">
+  <span class="px" onclick="closePopup()">✕</span>
+  <h3 id="pNom"></h3><div class="py-badge" id="pAnnee"></div>
+  <div class="pf" id="pFortune"></div>
+  <div class="pm">
+    <div>Profession : <span id="pProf"></span></div>
+    <div>Adresse (source) : <span id="pAdrH" class="adr-h"></span></div>
+    <div>Adresse (actuelle) : <span id="pAdrM"></span></div>
+    <div>Coordonnées MN95 : <span id="pCoord"></span></div>
+  </div>
+  <a class="pa" id="pUrl" href="#" target="_blank">→ Voir la fiche Catima</a>
+</div>
+
+<script id="saved-corrections" type="application/json">[]</script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
